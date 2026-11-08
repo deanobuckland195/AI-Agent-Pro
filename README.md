@@ -4,6 +4,8 @@ A general-purpose, local AI agent platform built with Python, Streamlit, the off
 
 Phase 3 adds a persistent PDF/text knowledge base with agent-scoped retrieval and source citations. Answers support Markdown formatting. Phase 4B adds explicitly approved read-only tool calling, arithmetic and syntax inspection. Phase 4C adds action-specific human approval for bounded practice text replacements. Phase 4D coordinates versioned sequential multi-agent workflows. Phase 4E adds an interactive visual workflow studio; browsing, submitted-code execution and external actions remain unavailable.
 
+**AI assistance:** This project was developed with substantial AI coding assistance. I’m reviewing the implementation to deepen my understanding and build my ability to maintain and extend it independently.
+
 ## Features
 
 - Create, edit, select and delete agents with names, descriptions and instructions.
