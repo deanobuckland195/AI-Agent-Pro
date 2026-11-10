@@ -397,6 +397,47 @@ Automated coverage includes five-specialist sequencing, immutable snapshots/vers
 
 ## Phase 4E: visual workflow studio
 
+### Six-stage software workflow
+
+The builder defaults to **Requirements Analyst → Researcher → Software Architect → Developer
+(AI Software Engineer) → QA Testing Engineer → Reviewer (Code Reviewer)**. Select six distinct
+existing agents; Architect and QA must be separate agents. The original five-stage template remains
+available. Choosing an existing **Definition to version** suggests its next version; saving inserts
+a new immutable definition and never rewrites an earlier definition or execution. No schema migration
+is required: schema 5 and engine/handoff version `1.0.0` continue to support both templates.
+
+The six-stage defaults are **8 model requests, 30,000 workflow tokens, 0 tool calls and 300 seconds
+of active time**. New six-stage executions snapshot each agent's output cap at no more than
+**1,200 tokens**, without changing that agent's Chat settings or earlier run snapshots. Keep agent
+internal steps at one initially. A budget is a ceiling, not a target spend or a guarantee of completion.
+
+Developer must include proposed code, proposed tests and relevant acceptance criteria in its bounded
+deliverable. QA receives that exact validated handoff, and Reviewer receives QA's validated findings.
+Each stage receives only the preceding artifact plus the shared goal; QA should preserve relevant
+implementation context for Reviewer. Larger proposals may need smaller goals rather than longer handoffs.
+
+**QA performs static review; no test runner or arbitrary code execution is exposed.** Its deliverable
+must start with `Test execution: NOT RUN`. Host instructions forbid execution/passing claims, and a
+defensive validator rejects a missing status or common unsupported execution claims before publishing
+the handoff or starting Reviewer. The inspector independently labels QA as unexecuted. This text check
+is not a general natural-language truth verifier and may conservatively reject quoted or hypothetical
+passing claims. Proposed tests are not execution evidence. Existing exact-action file approvals,
+separate tool grants and cumulative context/provenance checks still apply. With the initial zero tool
+allowance, selecting a required tool/proposal stops before sending its model request; increasing tool
+allowances requires a new saved version and fresh per-step selections.
+
+Workflow reservations remain conservative: serialized request bytes (including JSON escaping and
+tool schemas), a 1,024 allowance and the response output cap must fit alongside already charged usage.
+Known actual usage replaces a successful request's reservation. Unknown/uncertain usage retains the
+reservation; rejected reservations do not consume requests or tokens. Budget failures now distinguish
+request exhaustion from token shortfalls and report the stage, required reservation and remaining
+allowance. No rejected request is sent and no automatic retry occurs. Save a new version and explicitly
+start a new execution to change limits; completed steps and the failed execution remain in history.
+
+Offline tests cover both templates, six-agent handoffs, QA truthfulness guards, output caps, immutable
+version/history compatibility, budget failures, separate QA/Reviewer grants, human approval and UI
+inspection. Opt-in Chromium tests cover both stage counts, execution controls and responsive layouts.
+
 **Workflows** now shows a connected agent-node canvas for the selected immutable definition or retained execution. Each numbered node shows its role, configured agent name and a written/icon status: Pending, Running, Completed, Failed, Cancelled, Awaiting approval, or Interrupted. A definition preview never implies that any work has run. Executions display the frozen agent names from their snapshots, even if an agent is later renamed. Connections follow the saved sequential order; they are not new routes, editable permissions or parallel scheduling.
 
 Use **Inspect step N** with a pointer or keyboard to select a node. The inspector shows its responsibility, validated handoff summary and risks, with expandable deliverable/JSON and execution details. It distinguishes a provisional response from a saved handoff and does not infer success for a pending node. Inspection changes only session selection: it makes no model request, creates no grant, consumes no approval and writes no execution checkpoint. Agent names, roles, risks and summaries are native text. Deliverables reuse the existing safe Markdown renderer; untrusted content is never interpolated into HTML, CSS or JavaScript, and remote Markdown images do not load.

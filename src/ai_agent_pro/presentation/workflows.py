@@ -17,7 +17,7 @@ from ai_agent_pro.tools.executor import ToolExecutor
 from ai_agent_pro.tools.permissions import ToolPermissions
 from ai_agent_pro.tools.filesystem import PROJECT_ROOT
 from ai_agent_pro.tool_calling import ToolAccess
-from ai_agent_pro.workflow_contracts import ROLES, Limits, software_workflow
+from ai_agent_pro.workflow_contracts import ROLES, SOFTWARE_ROLES, Limits, software_workflow, six_stage
 from ai_agent_pro.workflow_engine import WorkflowEngine, StepAccess, BudgetedEmbeddings
 from ai_agent_pro.workflow_store import WorkflowStore
 
@@ -95,18 +95,28 @@ def workflows_view(repo,key):
     job = st.session_state.get('_workflow_job')
     active = bool(job and job.snapshot().active)
     with st.expander('Configure software-engineering workflow',expanded=not definitions):
+        template = st.selectbox('Workflow template',['Six-stage software engineering','Original five-stage software engineering'],disabled=active)
+        six = template == 'Six-stage software engineering'
+        roles = SOFTWARE_ROLES if six else ROLES
         ids = [a.id for a in agents]
         labels = {a.id:a.name for a in agents}
-        selected = [st.selectbox(role+' agent',ids,index=None,key='wf_agent_'+str(i),format_func=labels.get,disabled=active) for i,role in enumerate(ROLES)]
+        selected = [st.selectbox(role+' agent',ids,index=None,key='wf_agent_'+str(six)+'_'+str(i),format_func=labels.get,disabled=active) for i,role in enumerate(roles)]
+        if six:
+            st.caption('Assign six distinct agents. Developer: AI Software Engineer; Reviewer: Code Reviewer. '
+                       'QA reviews proposed code and tests; it cannot execute tests. New executions cap each response at 1,200 tokens.')
+            if len(agents) < 6:
+                st.warning('Create a separate Software Architect agent. Renaming an existing agent does not create another agent.')
         name = st.text_input('Workflow name',value='Software engineering',max_chars=80,disabled=active)
         existing = list(dict.fromkeys(d['id'] for d in definitions))
         target = st.selectbox('Definition to version',['new']+existing,format_func=lambda x:'New workflow' if x=='new' else next(d['name'] for d in definitions if d['id']==x),disabled=active)
-        version = st.number_input('Workflow version',1,1000,1,disabled=active)
-        requests = st.number_input('Workflow model-request limit',1,40,20,disabled=active)
-        tokens = st.number_input('Workflow token budget',4096,200000,100000,disabled=active)
+        next_version = max((d['version'] for d in definitions if d['id']==target),default=0)+1
+        version = st.number_input('Workflow version',1,1000,min(next_version,1000),key='wf_version_'+target,disabled=active)
+        st.caption('Saving adds an immutable version. Existing definitions and executions are retained.')
+        requests = st.number_input('Workflow model-request limit',1,40,8,disabled=active)
+        tokens = st.number_input('Workflow token budget',4096,200000,30000,disabled=active)
         seconds = st.number_input('Workflow active-time limit (seconds)',5,900,300,disabled=active)
-        tools = st.number_input('Workflow tool-call limit',0,20,10,disabled=active)
-        if st.button('Save workflow version',disabled=active or not all(selected)):
+        tools = st.number_input('Workflow tool-call limit',0,20,0,disabled=active)
+        if st.button('Save workflow version',disabled=active or not all(selected) or (six and len(set(selected)) != 6)):
             value = software_workflow(selected,Limits(requests,tokens,seconds,tools))
             value['name'] = name
             identifier,v = store.save(value,None if target=='new' else target,version)
@@ -128,6 +138,9 @@ def workflows_view(repo,key):
     current = store.sync(selected_run) if selected_run != 'new' else None
     if current:
         value = current['data']['definition']
+    if six_stage(value):
+        st.info('QA is a static review of the Developer proposal. Tests are NOT RUN by this workflow. '
+                'Reviewer receives the validated QA findings; neither stage certifies passing tests.')
     canvas = st.container()
     if not current:
         with canvas:
@@ -148,12 +161,19 @@ def workflows_view(repo,key):
             practice_files = st.multiselect('Practice files for step '+str(i+1),practice_workspace().files(),key='wf_practice_files_'+suffix,disabled=active)
             choices.append((tuple(tools),tuple(f for f in files.splitlines() if f),tuple(practice_files),enabled))
     st.caption('Limits: '+json.dumps(value['limits'])+'; at most 8 sequential steps. Connections show the saved order; parallel execution is unavailable.')
+    st.caption('The token budget must cover charged usage plus the next conservative reservation. '
+               'Reservations include serialized context bytes, protocol allowance and the output cap. '
+               '30,000 is initial headroom, not a guarantee of completion. Failed executions are retained; '
+               'changing limits requires a new definition version and execution.')
+    invalid_tools = value['limits']['max_tool_calls'] == 0 and any(c[0] or c[3] for c in choices)
+    if invalid_tools:
+        st.warning('The saved tool-call limit is zero. Remove tool/proposal selections or save a new version with a tool allowance.')
     if current:
         st.text('Goal: '+current['goal'])
     goal = st.text_area('Workflow goal',max_chars=2000,disabled=active or current is not None)
     if not key:
         st.info('Configure the existing OpenAI API credential before starting a workflow.')
-    if current is None and st.button('Start workflow',disabled=active or not key,type='primary'):
+    if current is None and st.button('Start workflow',disabled=active or not key or invalid_tools,type='primary'):
         if not goal.strip():
             raise AppError('Enter a workflow goal before starting.')
         accesses = build_access(repo,value['steps'],choices)
@@ -179,7 +199,7 @@ def workflows_view(repo,key):
             if snapshot.active and snapshot.text:
                 st.caption('Provisional current-step output; not yet a validated handoff.')
                 st.code(snapshot.text,language='json')
-        if row['status'] == 'ready' and st.button('Continue workflow',disabled=active or not key):
+        if row['status'] == 'ready' and st.button('Continue workflow',disabled=active or not key or invalid_tools):
             accesses = build_access(repo,value['steps'],choices,row['cursor'])
             st.session_state['_workflow_job'] = workflow_job(repo,key,row['id'],accesses)
             st.rerun(scope='app')

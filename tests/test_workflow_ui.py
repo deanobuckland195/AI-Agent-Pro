@@ -19,6 +19,7 @@ def test_ui_assign_existing_agents_and_execute_five_steps(tmp_path,monkeypatch):
     model=AsyncMock(side_effect=[result('Output '+str(i)) for i in range(5)])
     monkeypatch.setattr('ai_agent_pro.provider.OpenAIProvider.complete',model)
     at.sidebar.radio[0].set_value('Workflows').run()
+    select(at,'Workflow template').set_value('Original five-stage software engineering').run()
     assert button(at,'Save workflow version').disabled
     for i,role in enumerate(('Requirements Analyst','Researcher','Architect','Developer','Reviewer')):
         select(at,role+' agent').set_value(agents[i].id)

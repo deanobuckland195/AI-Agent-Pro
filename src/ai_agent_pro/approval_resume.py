@@ -119,6 +119,8 @@ async def resume(engine, action_id, agent_id, conversation_id, workspace):
         remaining()
         recorder.start('save')
         engine.check_cancelled()
+        if engine.answer_validator:
+            engine.answer_validator(answer)
         engine.repo.finish_run(rid, 'completed', requests, it if known else None, ot if known else None,
             state['elapsed'] + monotonic()-started, steps, answer=answer, sources=sources)
         clear()

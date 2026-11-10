@@ -9,7 +9,7 @@ from ai_agent_pro.database import now
 from ai_agent_pro.practice import digest
 from ai_agent_pro.safety import redact, validate_text
 from ai_agent_pro.approvals import encode
-from ai_agent_pro.workflow_contracts import definition, Limits
+from ai_agent_pro.workflow_contracts import definition, Limits, six_stage
 
 
 class WorkflowStore:
@@ -46,7 +46,8 @@ class WorkflowStore:
             raise AppError('Workflow definition is unavailable or changed.')
         value = definition(json.loads(row['definition']))
         agents = [self.repo.agent(s['agent_id']) for s in value['steps']]
-        snapshots = [asdict(replace(a,settings=replace(a.settings,history_messages=0))) for a in agents]
+        snapshots = [asdict(replace(a,settings=replace(a.settings,history_messages=0,
+            max_output_tokens=min(a.settings.max_output_tokens,1200) if six_stage(value) else a.settings.max_output_tokens))) for a in agents]
         raw = encode(dict(definition=value,agents=snapshots,goal=goal))
         wid = str(uuid4())
         with self.repo.connect() as db:

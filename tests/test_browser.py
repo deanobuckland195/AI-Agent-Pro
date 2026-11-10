@@ -292,6 +292,7 @@ def test_controlled_tool_activity_and_safe_failures(browser_server, outcome):
     from ai_agent_pro.config import Agent
     from ai_agent_pro.database import Repository
     from ai_agent_pro.telemetry import events
+    from support.browser_sync import StreamlitSession
     url, artifacts = browser_server
     repo = Repository(artifacts / 'browser.sqlite3')
     agent = Agent.create('Tool browser assistant', '', 'Helpful')
@@ -302,32 +303,43 @@ def test_controlled_tool_activity_and_safe_failures(browser_server, outcome):
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
         page = browser.new_page(viewport={'width':1440, 'height':1000})
+        session = StreamlitSession(page)
         page.route('**/*', lambda route: route.continue_() if route.request.url.startswith(url + '/') else route.abort())
         try:
             page.goto(url)
-            page.get_by_test_id('stSidebar').get_by_text('Chat', exact=True).click()
+            expect(page.get_by_test_id('stSidebar').get_by_text('Chat', exact=True)).to_be_visible()
+            session.wait_initial()
+            session.change(lambda: page.get_by_test_id('stSidebar').get_by_text('Chat', exact=True).click())
             # Wait for the full Chat render. Interacting while the script is
             # still running can open an empty menu that the render then closes.
             expect(page.get_by_role('textbox', name='Message this agent')).to_be_enabled()
             expect(page.get_by_test_id('stApp')).to_have_attribute('data-test-script-state', 'notRunning')
             page.get_by_text('Tools for the next message', exact=True).click()
             chooser = page.get_by_role('combobox', name='Approve tools for this agent and execution')
+            files = page.get_by_role('textbox', name='Approved project files (one relative filename per line)')
+            def edit_files(value):
+                files.fill(value)
+                files.press('Tab')
+            # Commit focus/blur and the newly mounted widget defaults before
+            # interacting with the popup; an idle flag alone cannot do this.
+            session.change(lambda: edit_files(' '), expected_value=' ')
             if outcome != 'unapproved':
+                # Instantaneous fill + immediate navigation races React-Aria's
+                # asynchronous filter/focus updates. Use real keyboard input,
+                # then select the visible filtered option without any retry.
                 option = page.get_by_role('listbox').get_by_text('calculator v1.0.0', exact=True)
-                # The expanding panel can interrupt the first dropdown open.
-                # Reopen only the UI menu; never retry a submitted execution.
-                for attempt in range(3):
-                    chooser.fill('calculator')
-                    chooser.press('ArrowDown')
-                    try:
-                        expect(option).to_be_visible(timeout=1500)
-                        break
-                    except AssertionError:
-                        if attempt == 2:
-                            raise
-                        chooser.press('Escape')
-                option.click()
-                chooser.press('Escape')
+                chooser.click()
+                chooser.press_sequentially('calculator', delay=20)
+                expect(option).to_be_visible()
+                def select_and_close():
+                    option.click()
+                    expect(page.get_by_test_id('stMultiSelect').get_by_text('calculator v1.0.0', exact=True)).to_be_visible()
+                    chooser.press('Escape')
+                    chooser.press('Tab')
+                session.change(select_and_close, expected_value=['calculator v1.0.0'])
+                expect(page.get_by_test_id('stMultiSelect').get_by_text('calculator v1.0.0', exact=True)).to_be_visible()
+                # A separate server round trip must retain the approved choice.
+                session.change(lambda: edit_files('  '), expected_value='  ')
                 expect(page.get_by_test_id('stMultiSelect').get_by_text('calculator v1.0.0', exact=True)).to_be_visible()
             chat = page.get_by_role('textbox', name='Message this agent')
             chat.fill('Please calculate ' + outcome)

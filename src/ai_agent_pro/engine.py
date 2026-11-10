@@ -15,11 +15,12 @@ logger = logging.getLogger("ai_agent_pro")
 
 
 class AgentEngine:
-    def __init__(self, repository, provider, retrieval=None, observer=None, on_text=None, cancel_requested=None, tool_access=None, on_tool=None, agent_snapshot=None, execution_policy="", workflow_identity=None, retrieval_query=None, on_tool_context=None):
+    def __init__(self, repository, provider, retrieval=None, observer=None, on_text=None, cancel_requested=None, tool_access=None, on_tool=None, agent_snapshot=None, execution_policy="", workflow_identity=None, retrieval_query=None, on_tool_context=None, answer_validator=None):
         self.tool_access, self.on_tool = tool_access, on_tool
         self.on_tool_context = on_tool_context
         self.agent_snapshot, self.execution_policy = agent_snapshot, execution_policy
         self.workflow_identity, self.retrieval_query = workflow_identity, retrieval_query
+        self.answer_validator = answer_validator
         self.repo = repository
         self.provider = provider
         self.retrieval = retrieval
@@ -216,6 +217,8 @@ class AgentEngine:
                 validate_citations(answer, sources)
             if tool_session:
                 tool_session.recheck()
+            if self.answer_validator:
+                self.answer_validator(answer)
             self.check_cancelled()
             recorder.start('save')
             # The worker's save observer and Stop share a lock: either Stop

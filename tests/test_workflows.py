@@ -143,7 +143,7 @@ def test_wrong_step_principal_cannot_reuse_another_agent_access(repo,tools):
 
 
 @pytest.mark.parametrize('limits,responses,expected',[(Limits(max_requests=1),[result()],1),
-    (Limits(token_budget=4096),[replace(result(),input_tokens=3000,output_tokens=1000)],1),(Limits(max_tool_calls=0),[called()],1)])
+    (Limits(token_budget=4096),[replace(result(),input_tokens=3000,output_tokens=1000)],1),(Limits(max_tool_calls=0),[called()],0)])
 def test_global_request_token_and_tool_limits(repo,tools,limits,responses,expected):
     store,wid,agents,_=prepare(repo,limits=limits)
     access={}

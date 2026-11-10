@@ -8,7 +8,8 @@ from test_browser import browser_server,pytestmark
 
 
 @pytest.mark.parametrize('width',[390,768,1440])
-def test_connected_nodes_keyboard_inspection_and_responsive_safety(browser_server,width):
+@pytest.mark.parametrize('count',[5,6])
+def test_connected_nodes_keyboard_inspection_and_responsive_safety(browser_server,width,count):
     from playwright.sync_api import sync_playwright,expect,TimeoutError as BrowserTimeout
     from ai_agent_pro.database import Repository
     from test_workflows import prepare,execute,provider,result
@@ -16,15 +17,22 @@ def test_connected_nodes_keyboard_inspection_and_responsive_safety(browser_serve
 
     url,artifacts=browser_server
     repo=Repository(artifacts/'browser.sqlite3')
-    store,wid,agents,value=prepare(repo,5)
+    if count == 6:
+        from test_six_stage_workflows import prepare_six
+        store,wid,agents,value=prepare_six(repo)
+    else:
+        store,wid,agents,value=prepare(repo,5)
     hostile='''<script>window.__visualInjected=true</script>
 <img src="https://untrusted.invalid/pixel" onerror="window.__visualInjected=true">
 ![Tracking](https://untrusted.invalid/markdown-image)
 [Unsafe](javascript:window.__visualInjected=true)
 '''
     outputs=[]
-    for i in range(5):
-        payload=json.loads(result(hostile if i==1 else 'Deliverable '+str(i)).text)
+    for i in range(count):
+        deliverable = hostile if i==1 else 'Deliverable '+str(i)
+        if count == 6 and i == 4:
+            deliverable = 'Test execution: NOT RUN\n'+deliverable
+        payload=json.loads(result(deliverable).text)
         payload['risks']=['Confirm the boundary cases.']
         outputs.append(replace(result(),text=json.dumps(payload)))
     execute(repo,provider(*outputs),wid)
@@ -57,7 +65,7 @@ def test_connected_nodes_keyboard_inspection_and_responsive_safety(browser_serve
             expect(page.get_by_role('textbox',name='Workflow goal',exact=True)).to_be_visible()
             expect(page.get_by_test_id('stApp')).to_have_attribute('data-test-script-state','notRunning')
             combo=page.get_by_role('combobox',name='Workflow execution',exact=True)
-            label='Build a safe sample feature. · '+wid[:8]
+            label=before['goal'][:60]+' · '+wid[:8]
             for attempt in range(3):
                 combo.click()
                 try:
@@ -71,13 +79,16 @@ def test_connected_nodes_keyboard_inspection_and_responsive_safety(browser_serve
             expect(canvas.get_by_role('button',name='Inspect step 1',exact=True)).to_be_enabled()
             assert canvas.get_by_role('button',name='Inspect step 1',exact=True).get_attribute('tabindex')!='-1'
             nodes=canvas.locator('[class*="st-key-wf_node_"]')
-            expect(nodes).to_have_count(5)
-            for i in range(5):
+            expect(nodes).to_have_count(count)
+            for i in range(count):
                 expect(nodes.nth(i).get_by_text('✓ Completed',exact=True)).to_be_visible()
-                expect(nodes.nth(i).get_by_text(agents[i].name,exact=True)).to_be_visible()
+                expect(nodes.nth(i).get_by_text(agents[i].name,exact=True).first).to_be_visible()
             assert nodes.nth(0).evaluate("el=>getComputedStyle(el,'::after').content")!='none'
             assert nodes.nth(0).evaluate("el=>getComputedStyle(el,'::before').content")!='none'
-            assert nodes.nth(4).evaluate("el=>getComputedStyle(el,'::after').content")=='none'
+            assert nodes.nth(count-1).evaluate("el=>getComputedStyle(el,'::after').content")=='none'
+            if count == 6:
+                canvas.get_by_role('button',name='Inspect step 5',exact=True).click()
+                expect(page.locator('.st-key-workflow_inspector')).to_contain_text('Test execution: NOT RUN')
             canvas.get_by_role('heading',name='Agent workflow',exact=True).scroll_into_view_if_needed()
             page.screenshot(path=str(artifacts/f'workflow-canvas-{width}.png'),full_page=True)
             page.locator('.st-key-workflow_nodes').scroll_into_view_if_needed()

@@ -125,6 +125,9 @@ def inspector(repo, node, row=None):
         st.caption('Agent ID: '+node['agent_id'])
         st.write('Step responsibility')
         st.text(node['task'])
+        if node['role'] == 'QA Testing Engineer':
+            st.info('Test execution: NOT RUN. This stage provides static findings and proposed tests. '
+                    'There is no test runner; model text is not execution evidence.')
         step = node['step']
         if step.get('output'):
             try:

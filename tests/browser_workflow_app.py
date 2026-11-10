@@ -11,15 +11,25 @@ from ai_agent_pro.provider import OpenAIProvider
 from ai_agent_pro.practice import PracticeWorkspace,NAME
 from test_streaming import stream_events,encode_event
 from test_tool_calling import sse_tool_events
+from test_provider import response_body
 
 
 class Wire(httpx.AsyncByteStream):
-    def __init__(self,items,hold=False):self.items,self.hold=items,hold
+    def __init__(self,items,hold=False,reviewer_hold=False):
+        self.items,self.hold,self.reviewer_hold=items,hold,reviewer_hold
     async def __aiter__(self):
         for item in self.items:
             if self.hold and item['type']=='response.completed':
                 while not (Path(os.environ['AI_AGENT_PRO_BROWSER_CONTROL'])/'release').exists():
                     await asyncio.sleep(.02)
+            if self.reviewer_hold and item['type']=='response.completed':
+                control=Path(os.environ['AI_AGENT_PRO_BROWSER_CONTROL'])
+                (control/'reviewer-waiting').touch()
+                while not (control/'release-reviewer').exists():
+                    await asyncio.sleep(.02)
+                # Deliberately exceed Playwright's old five-second assertion
+                # allowance, while staying far below the workflow deadline.
+                await asyncio.sleep(6)
             yield encode_event(item)
             await asyncio.sleep(.01)
     async def aclose(self):pass
@@ -27,20 +37,29 @@ class Wire(httpx.AsyncByteStream):
 
 def handler(request):
     body=json.loads(request.content)
-    assert body['store'] is False and body['stream'] is True
+    assert body['store'] is False
     payload=json.loads(next(m['content'] for m in body['input'] if m.get('role')=='user'))
     goal=payload['goal'].lower()
     ordinal=payload['handoff']['to_step'] if payload['handoff'] else 0
     output=any(m.get('type')=='function_call_output' for m in body['input'])
+    if not body.get('stream'):
+        assert '\nStep role: QA Testing Engineer' in body['instructions']
+        text=json.dumps(dict(schema_version='1.0.0',summary='Static QA',
+            deliverable='Test execution: NOT RUN\nStatic findings and proposed tests.',risks=[]))
+        return httpx.Response(200,json=response_body(text=text))
     if ordinal==0 and ('approve' in goal or 'deny' in goal) and not output:
         assert [t['name'] for t in body['tools']]==[NAME]
         items=sse_tool_events(arguments=json.dumps(dict(path='example.txt',content='Reviewed workflow practice text.\n')))
         items=json.loads(json.dumps(items).replace('calculator__v1_0_0',NAME))
     else:
         assert 'tools' not in body
-        text='invalid output' if 'invalid' in goal else json.dumps(dict(schema_version='1.0.0',summary='Stage '+str(ordinal+1),deliverable='Reviewed output '+str(ordinal+1),risks=[]))
+        prefix = 'Test execution: NOT RUN\n' if '\nStep role: QA Testing Engineer' in body['instructions'] else ''
+        text='invalid output' if 'invalid' in goal else json.dumps(dict(schema_version='1.0.0',summary='Stage '+str(ordinal+1),deliverable=prefix+'Reviewed output '+str(ordinal+1),risks=[]))
         items=stream_events(chunks=(text,))
-    return httpx.Response(200,headers={'content-type':'text/event-stream'},stream=Wire(items,hold='cancel' in goal))
+    reviewer_hold = ('\nStep role: Reviewer' in body['instructions'] and
+                     (Path(os.environ['AI_AGENT_PRO_BROWSER_CONTROL'])/'hold-reviewer').exists())
+    return httpx.Response(200,headers={'content-type':'text/event-stream'},
+        stream=Wire(items,hold='cancel' in goal,reviewer_hold=reviewer_hold))
 
 
 def factory(**kwargs):

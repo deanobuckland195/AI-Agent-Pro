@@ -18,7 +18,7 @@ from ai_agent_pro.practice import digest
 from ai_agent_pro.tool_calling import tool_reservation
 from ai_agent_pro.tools.contracts import ToolFailure
 from ai_agent_pro.tools.filesystem import read_file
-from ai_agent_pro.workflow_contracts import Limits, POLICY, artifact, step_input
+from ai_agent_pro.workflow_contracts import Limits, POLICY, QA_POLICY, artifact, qa_report, step_input
 from ai_agent_pro.workflow_store import WorkflowStore
 
 
@@ -61,6 +61,9 @@ class BudgetedProvider:
     async def complete(self, **kwargs):
         e = self.engine
         e.guard()
+        if kwargs.get('tools') and kwargs.get('tool_choice') == 'required' and e.store.get(e.wid)['tool_calls'] >= e.limits.max_tool_calls:
+            raise AppError('Workflow tool-call budget cannot cover a tool request. No model request was sent; '
+                           'remove selected tools or save a new workflow version with a tool allowance.')
         reserve = tool_reservation(kwargs['instructions'],kwargs['messages'],kwargs.get('tools',[]),kwargs['max_output_tokens'])
         e.reserve(reserve)
         kwargs['timeout'] = min(kwargs['timeout'],e.remaining())
@@ -133,8 +136,20 @@ class WorkflowEngine:
             row = db.execute('SELECT * FROM workflow_runs WHERE id=? AND owner=?',(self.wid,self.owner)).fetchone()
             if not row or row['status'] != 'running' or row['cancel_requested']:
                 raise AppError('Workflow is no longer authorised to make a model request.')
-            if row['requests'] >= self.limits.max_requests or row['tokens']+tokens > self.limits.token_budget:
-                raise AppError('Workflow model-request or token budget cannot cover another request.')
+            stage = self.store.get(self.wid)['data']['definition']['steps'][getattr(self,'ordinal',row['cursor'])]['role']
+            if row['requests'] >= self.limits.max_requests:
+                raise AppError(f'Workflow model-request budget cannot cover another request at {stage}: '
+                               f'{row["requests"]}/{self.limits.max_requests} requests used. No request was sent. '
+                               'Save a new workflow version with a larger request limit or fewer internal steps/tools.')
+            if row['tokens']+tokens > self.limits.token_budget:
+                remaining = self.limits.token_budget-row['tokens']
+                raise AppError(f'Workflow token budget cannot cover another request at {stage}: '
+                               f'{row["tokens"]:,} charged/reserved; {tokens:,} required for the next request; '
+                               f'{remaining:,} remaining of {self.limits.token_budget:,} '
+                               f'(shortfall {tokens-remaining:,}). No request was sent. '
+                               'Reservations include serialized context bytes, protocol allowance and the output cap; '
+                               'they can exceed actual usage. Shorten handoffs or save a new workflow version '
+                               'with a larger budget. The failed execution and completed steps are retained.')
             db.execute('UPDATE workflow_runs SET requests=requests+1,tokens=tokens+?,active_seconds=?,updated_at=? WHERE id=?',
                 (tokens,self.elapsed(),now(),self.wid))
 
@@ -183,6 +198,8 @@ class WorkflowEngine:
 
     def complete_step(self,step,answer):
         value = artifact(answer)
+        if self.store.get(self.wid)['data']['definition']['steps'][self.ordinal]['role'] == 'QA Testing Engineer':
+            qa_report(value)
         with self.repo.connect() as db:
             refs = db.execute('SELECT document_id,generation_id FROM run_sources WHERE run_id=?',(step['run_id'],)).fetchall()
         docs = {tuple(x) for x in self.provenance.get('documents',[])}
@@ -286,6 +303,12 @@ class WorkflowEngine:
                     observer=self.observer,on_text=self.on_text,on_tool=self.on_tool,on_tool_context=self.collect,cancel_requested=self.guard,
                     tool_access=self.permission.tools,agent_snapshot=actor,execution_policy=POLICY+'\nStep role: '+spec['role'],
                     workflow_identity=(wid,ordinal,self.owner),retrieval_query=row['goal']+'\n'+spec['task'])
+                if spec['role'] == 'QA Testing Engineer':
+                    engine.execution_policy += QA_POLICY
+                    # Reject unsupported claims before the child publishes a completed
+                    # answer, including approval continuations. No provisional QA text.
+                    engine.on_text = None
+                    engine.answer_validator = lambda raw: qa_report(artifact(raw))
                 if child:
                     if not approval_id or self.workspace is None:
                         raise AppError('Review and approve the exact pending workflow action before resuming.')
