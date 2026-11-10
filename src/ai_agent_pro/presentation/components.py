@@ -2,6 +2,7 @@
 from datetime import datetime, timezone
 import math
 import streamlit as st
+from ai_agent_pro.presentation.theme import DARK_STYLE
 
 ROUTES = ('Overview', 'Agents', 'Chat', 'Knowledge base', 'Activity', 'Workflows', 'Help')
 
@@ -30,14 +31,7 @@ def format_bytes(size):
 
 def apply_style():
     # Static, application-owned CSS only. No user/model content is interpolated.
-    st.markdown('''<style>
-    .st-key-brand {border-bottom:1px solid #D6DEEA; padding-bottom:1rem; margin-bottom:.5rem}
-    .st-key-intro {border-left:4px solid #2563EB; padding:1rem 1.25rem; background:#EEF4FF; border-radius:.5rem}
-    .st-key-metrics {margin: .75rem 0 1rem}
-    @media (max-width: 640px) {
-      .st-key-intro {padding:.75rem}
-    }
-    </style>''', unsafe_allow_html=True)
+    st.markdown(DARK_STYLE, unsafe_allow_html=True)
 
 
 def notice(message):

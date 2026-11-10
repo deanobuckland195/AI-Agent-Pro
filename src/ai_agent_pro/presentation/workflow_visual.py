@@ -21,39 +21,51 @@ STATUSES = {
 # Static selectors and palette only. No model, file, agent or database text is
 # interpolated into HTML, CSS or selectors. Native widgets retain their roles.
 STYLE = '''<style>
-.st-key-workflow_canvas {padding:1.1rem; border:1px solid var(--secondary-background-color,#D5DCE8);
- border-radius:16px; background:var(--background-color); margin:.5rem 0 1rem}
+.st-key-workflow_canvas {padding:1.35rem; border:1px solid #354867;
+ border-radius:20px; background:linear-gradient(145deg,#111f36,#10192d); margin:.6rem 0 1.2rem;
+ box-shadow:0 14px 38px rgba(0,5,18,.2)}
+.st-key-workflow_nodes {padding:.65rem 0 .5rem}
 .st-key-workflow_nodes [data-testid="stHorizontalBlock"] {gap:1.15rem; align-items:stretch}
 .st-key-workflow_nodes [data-testid="stColumn"] {min-width:0}
-[class*="st-key-wf_node_"] {position:relative; height:100%; border-radius:12px;
- border-top:4px solid #64748B!important; padding:.85rem!important; overflow-wrap:anywhere; overflow:visible!important}
+.st-key-workflow_nodes [data-testid="stColumn"] > div {height:100%}
+[class*="st-key-wf_node_"] {position:relative; height:100%; min-height:18rem; border-radius:15px;
+ border:1px solid #3d506f!important; border-top:3px solid #94a6c4!important;
+ background:linear-gradient(160deg,#182740,#121e33); padding:.9rem!important;
+ box-shadow:0 6px 18px rgba(0,5,18,.16); overflow-wrap:anywhere; overflow:visible!important}
+[class*="st-key-wf_node_"] [data-testid="stText"] {color:#edf3ff; font-size:.92rem; line-height:1.55}
 [class*="st-key-wf_node_"] p {overflow-wrap:anywhere}
-[class*="st-key-wf_node_"] button {min-height:44px}
+[class*="st-key-wf_node_"] [data-testid="stCaptionContainer"] {color:#b3c1da; font-size:.72rem; letter-spacing:.04em}
+[class*="st-key-wf_node_"] button {min-height:44px; font-size:.85rem}
 [class*="st-key-wf_node_"]:not([class*="_last"])::before {content:""; position:absolute;
- right:-.75rem; top:50%; width:.75rem; border-top:2px solid #64748B}
+ right:-.75rem; top:50%; width:.75rem; border-top:2px solid #829bcc}
 [class*="st-key-wf_node_"]:not([class*="_last"])::after {content:""; position:absolute;
- right:-.88rem; top:50%; width:.48rem; height:.48rem; border-top:2px solid #64748B;
- border-right:2px solid #64748B; transform:rotate(45deg)}
-[class*="st-key-wf_node_"][class*="_status_running"] {border-top-color:#2563EB!important}
-[class*="st-key-wf_node_"][class*="_status_completed"] {border-top-color:#15803D!important}
+ right:-.88rem; top:50%; width:.48rem; height:.48rem; border-top:2px solid #829bcc;
+ border-right:2px solid #829bcc; transform:rotate(45deg)}
+[class*="st-key-wf_node_"][class*="_status_running"] {border-top-color:#8ab4ff!important;
+ box-shadow:0 0 0 1px rgba(138,180,255,.18),0 6px 22px rgba(31,70,130,.16)}
+[class*="st-key-wf_node_"][class*="_status_completed"] {border-top-color:#6cdbb2!important}
 [class*="st-key-wf_node_"][class*="_status_failed"],
-[class*="st-key-wf_node_"][class*="_status_interrupted"] {border-top-color:#B91C1C!important}
-[class*="st-key-wf_node_"][class*="_status_waiting_approval"] {border-top-color:#B45309!important}
-[class*="st-key-wf_node_"][class*="_chosen"] {outline:2px solid var(--primary-color,#2563EB); outline-offset:2px}
-.st-key-workflow_inspector {margin-top:1rem; padding:1rem; border-radius:12px}
+[class*="st-key-wf_node_"][class*="_status_interrupted"] {border-top-color:#ff98a6!important}
+[class*="st-key-wf_node_"][class*="_status_cancelled"] {border-top-color:#b7c2d7!important}
+[class*="st-key-wf_node_"][class*="_status_waiting_approval"] {border-top-color:#f6cb7b!important}
+[class*="st-key-wf_node_"][class*="_chosen"] {outline:2px solid #b6a2ff; outline-offset:3px;
+ background:linear-gradient(150deg,#202d4b,#211f3a)}
+.st-key-workflow_inspector {margin-top:1.3rem; padding:1.25rem; border:1px solid #405475!important;
+ background:#111d32; border-radius:16px}
 .st-key-workflow_metrics [data-testid="stMetricLabel"] p {white-space:normal!important; overflow:visible!important; text-overflow:clip!important}
-.st-key-workflow_canvas button:focus-visible {outline:3px solid var(--primary-color,#2563EB)!important;
- outline-offset:3px!important}
-@media (max-width:1100px) {
+.st-key-workflow_canvas button:focus-visible {outline:3px solid #b6a2ff!important; outline-offset:3px!important}
+@media (max-width:1200px) {
  .st-key-workflow_nodes [data-testid="stHorizontalBlock"] {flex-direction:column!important}
  .st-key-workflow_nodes [data-testid="stColumn"] {width:100%!important; flex:1 1 100%!important}
+ [class*="st-key-wf_node_"] {min-height:0}
  [class*="st-key-wf_node_"]:not([class*="_last"])::before {right:auto; left:50%; top:auto;
- bottom:-.75rem; width:0; height:.75rem; border-top:0; border-left:2px solid #64748B}
+ bottom:-.75rem; width:0; height:.75rem; border-top:0; border-left:2px solid #829bcc}
  [class*="st-key-wf_node_"]:not([class*="_last"])::after {right:auto; left:50%; top:auto;
  bottom:-.85rem; transform:rotate(135deg)}
 }
 @media (max-width:640px) {
- .st-key-workflow_canvas {padding:.75rem}
+ .st-key-workflow_canvas {padding:.85rem; border-radius:15px}
+ .st-key-workflow_inspector {padding:.85rem}
  .st-key-workflow_metrics [data-testid="stHorizontalBlock"] {flex-wrap:wrap}
  .st-key-workflow_metrics [data-testid="stColumn"] {min-width:40%!important; flex:1 1 40%!important}
 }

@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 from test_browser import browser_server,pytestmark
+from support.browser_sync import StreamlitSession
 
 
 @pytest.mark.parametrize('width',[390,768,1440])
@@ -51,15 +52,22 @@ def test_connected_nodes_keyboard_inspection_and_responsive_safety(browser_serve
                 r.abort()
         context.route('**/*',route)
         page=context.new_page()
+        session=StreamlitSession(page)
         errors=[]
         page.on('pageerror',lambda e:errors.append(str(e)))
         try:
             page.goto(url)
             expect(page.get_by_role('heading',name='Overview',exact=True)).to_be_visible()
+            session.wait_initial()
             # Native keyboard navigation works even with a collapsed sidebar.
-            if not page.get_by_test_id('stSidebar').is_visible():
+            sidebar=page.get_by_test_id('stSidebar')
+            # An off-canvas sidebar can remain CSS-visible. Check its position
+            # rather than mistaking it for an open, clickable mobile drawer.
+            sidebar_box=sidebar.bounding_box()
+            if not sidebar_box or sidebar_box['x']<0:
                 page.get_by_role('button',name='Expand sidebar',exact=True).click()
-            page.get_by_test_id('stSidebar').get_by_text('Workflows',exact=True).click()
+            expect(sidebar).to_be_in_viewport()
+            session.change(lambda: page.get_by_test_id('stSidebar').get_by_text('Workflows',exact=True).click())
             if width<=768:
                 page.get_by_role('button',name='Collapse sidebar',exact=True).click()
             expect(page.get_by_role('textbox',name='Workflow goal',exact=True)).to_be_visible()
@@ -69,12 +77,13 @@ def test_connected_nodes_keyboard_inspection_and_responsive_safety(browser_serve
             for attempt in range(3):
                 combo.click()
                 try:
-                    page.get_by_role('listbox').get_by_text(label,exact=True).click(timeout=1500)
+                    session.change(lambda: page.get_by_role('listbox').get_by_text(label,exact=True).click(timeout=1500),expected_value=label)
                     break
                 except BrowserTimeout:
                     if attempt==2:raise
                     combo.press('Escape')
             canvas=page.locator('.st-key-workflow_canvas')
+            expect(canvas).to_have_count(1)
             expect(canvas.get_by_text('Workflow status: completed',exact=True)).to_be_visible()
             expect(canvas.get_by_role('button',name='Inspect step 1',exact=True)).to_be_enabled()
             assert canvas.get_by_role('button',name='Inspect step 1',exact=True).get_attribute('tabindex')!='-1'

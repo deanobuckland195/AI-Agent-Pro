@@ -3,8 +3,9 @@ import altair as alt
 import streamlit as st
 from ai_agent_pro.analytics import Analytics, Filters, PERIODS
 from ai_agent_pro.presentation.components import page_header, navigate, format_bytes
+from ai_agent_pro.presentation.theme import BLUE, VIOLET, GREEN, RED, AMBER, TEXT, MUTED
 
-STATUS_COLORS = ['#2457D6', '#087F5B', '#B42318', '#9A6700', '#7551A8']
+STATUS_COLORS = [BLUE, GREEN, RED, AMBER, VIOLET]
 
 
 def filters_view(repo, prefix, include_status=False):
@@ -29,7 +30,10 @@ def chart_spec(rows, kind):
     """Pure chart builder: data is supplied by repository aggregates, never seeded."""
     if not rows:
         return None
-    base = alt.Chart(alt.Data(values=rows))
+    base = alt.Chart(alt.Data(values=rows)).configure(
+        background='transparent', view={'stroke':'#30425f'},
+        axis={'labelColor':MUTED,'titleColor':TEXT,'gridColor':'#293a55','domainColor':'#405573'},
+        legend={'labelColor':MUTED,'titleColor':TEXT})
     if kind == 'activity':
         return base.mark_bar(cornerRadiusTopLeft=3, cornerRadiusTopRight=3).encode(
             x=alt.X('day:O', title='Day (UTC)'), y=alt.Y('tasks:Q', title='Recorded tasks'),
@@ -38,16 +42,16 @@ def chart_spec(rows, kind):
     if kind == 'tokens':
         return base.transform_fold(['input_tokens', 'output_tokens'], as_=['kind', 'tokens']).mark_bar().encode(
             x=alt.X('day:O', title='Day (UTC)'), y=alt.Y('tokens:Q', title='Known generation tokens'),
-            color=alt.Color('kind:N', scale=alt.Scale(range=['#2457D6', '#087F5B'])), tooltip=['day:O', 'kind:N', 'tokens:Q'])
+            color=alt.Color('kind:N', scale=alt.Scale(range=[BLUE, VIOLET])), tooltip=['day:O', 'kind:N', 'tokens:Q'])
     if kind in ('durations', 'index_durations'):
-        return base.mark_line(point=True, color='#2457D6').encode(
+        return base.mark_line(point=True, color=BLUE).encode(
             x=alt.X('day:O', title='Day (UTC)'), y=alt.Y('seconds:Q', title='Mean recorded indexing seconds' if kind == 'index_durations' else 'Mean recorded task seconds'),
             tooltip=['day:O', alt.Tooltip('seconds:Q', format='.2f'), 'samples:Q'])
     if kind == 'agents':
-        return base.mark_bar(color='#2457D6', cornerRadiusEnd=3).encode(
+        return base.mark_bar(color=BLUE, cornerRadiusEnd=3).encode(
             x=alt.X('tasks:Q', title='Recorded tasks'), y=alt.Y('agent_id:N', title='Agent ID'), tooltip=['agent:N', 'agent_id:N', 'tasks:Q'])
     if kind == 'errors':
-        return base.mark_bar(color='#B42318', cornerRadiusEnd=3).encode(
+        return base.mark_bar(color=RED, cornerRadiusEnd=3).encode(
             x=alt.X('tasks:Q', title='Recorded errors'), y=alt.Y('category:N', title=None), tooltip=['category:N', 'tasks:Q'])
     raise ValueError('Unsupported chart type')
 
